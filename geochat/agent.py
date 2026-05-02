@@ -1,3 +1,9 @@
+"""Iterative reasoning agent for GeoChat.
+
+GeoAgent wraps the existing GeoChat model stack with a small control loop:
+planner -> optional tool call -> memory update -> repeat -> final answer.
+
+"""
 
 from __future__ import annotations
 
