@@ -22,7 +22,11 @@ from geochat.mm_utils import KeywordsStoppingCriteria, get_model_name_from_path,
 from geochat.model.builder import load_pretrained_model
 
 
-ACTION_SCHEMA = '{"action": "tool|answer|stop", "tool": "crop", "arguments": {}, "final": "optional final answer"}'
+ACTION_SCHEMA = (
+    '{"action": "tool|answer|stop", '
+    '"tool": "crop|rotate|enhance_contrast|detect_edges", '
+    '"arguments": {}, "final": "optional final answer"}'
+)
 
 
 @dataclass
@@ -126,6 +130,62 @@ class CropTool:
         cropped = image.crop((left, top, right, bottom))
         content = f"Cropped region: [{left}, {top}, {right}, {bottom}] from image size {width}x{height}."
         return GeoAgentToolResult(tool_name=self.name, content=content, image=cropped, metadata={"bbox": [left, top, right, bottom]})
+
+
+@dataclass
+class RotationTool:
+    name: str = "rotate"
+    description: str = (
+        "Rotate the current image clockwise by a specified angle in degrees. "
+        "Arguments: angle=<float>. Useful for re-orienting oblique aerial views "
+        "to a canonical upright alignment before classification."
+    )
+
+    def run(self, *, image: Optional[Image.Image], memory: GeoAgentMemory, arguments: Dict[str, Any]) -> GeoAgentToolResult:
+        if image is None:
+            raise ValueError("rotate tool requires an image")
+        angle = float(arguments.get("angle", 0.0))
+        rotated = image.rotate(-angle, expand=True)
+        content = f"Rotated image by {angle:.1f} degrees clockwise."
+        return GeoAgentToolResult(tool_name=self.name, content=content, image=rotated, metadata={"angle": angle})
+
+
+@dataclass
+class ContrastEnhanceTool:
+    name: str = "enhance_contrast"
+    description: str = (
+        "Enhance the contrast of the current image. "
+        "Arguments: factor=<float> (1.0=original, >1.0=more contrast, default=2.0). "
+        "Useful for low-contrast satellite imagery where fine textures are hard to distinguish."
+    )
+
+    def run(self, *, image: Optional[Image.Image], memory: GeoAgentMemory, arguments: Dict[str, Any]) -> GeoAgentToolResult:
+        if image is None:
+            raise ValueError("enhance_contrast tool requires an image")
+        from PIL import ImageEnhance
+        factor = float(arguments.get("factor", 2.0))
+        factor = max(0.1, min(factor, 10.0))
+        enhanced = ImageEnhance.Contrast(image).enhance(factor)
+        content = f"Applied contrast enhancement with factor {factor:.2f}."
+        return GeoAgentToolResult(tool_name=self.name, content=content, image=enhanced, metadata={"factor": factor})
+
+
+@dataclass
+class EdgeDetectionTool:
+    name: str = "detect_edges"
+    description: str = (
+        "Apply edge detection to the current image to highlight structural boundaries. "
+        "No arguments required. Useful for counting objects, identifying roads, "
+        "coastlines, or building outlines."
+    )
+
+    def run(self, *, image: Optional[Image.Image], memory: GeoAgentMemory, arguments: Dict[str, Any]) -> GeoAgentToolResult:
+        if image is None:
+            raise ValueError("detect_edges tool requires an image")
+        from PIL import ImageFilter
+        edges = image.convert("RGB").filter(ImageFilter.FIND_EDGES)
+        content = "Applied edge detection filter to highlight structural boundaries."
+        return GeoAgentToolResult(tool_name=self.name, content=content, image=edges, metadata={})
 
 
 def _infer_conv_mode(model_name: str) -> str:
@@ -381,4 +441,4 @@ class GeoAgent:
 
 
 def build_default_tools() -> List[GeoAgentTool]:
-    return [CropTool()]
+    return [CropTool(), RotationTool(), ContrastEnhanceTool(), EdgeDetectionTool()]

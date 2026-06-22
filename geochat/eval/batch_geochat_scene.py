@@ -11,6 +11,11 @@ from geochat.model.builder import load_pretrained_model
 from geochat.utils import disable_torch_init
 from geochat.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 
+def get_chunk(lst, n, k):
+    """Split list into n equal chunks and return the k-th chunk."""
+    size = math.ceil(len(lst) / n)
+    return lst[k * size: (k + 1) * size]
+
 from PIL import Image
 import math
 

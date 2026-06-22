@@ -12,16 +12,30 @@ from types import MethodType
 from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 from transformers.models.bloom.modeling_bloom import BaseModelOutputWithPastAndCrossAttentions, BloomForCausalLM, BloomModel, CausalLMOutputWithCrossAttentions, CrossEntropyLoss
-from transformers.models.bloom.modeling_bloom import _expand_mask as _expand_mask_bloom
-from transformers.models.bloom.modeling_bloom import _make_causal_mask as _make_causal_mask_bloom
 from transformers.models.bloom.modeling_bloom import logging
+try:
+    from transformers.models.bloom.modeling_bloom import _expand_mask as _expand_mask_bloom
+    from transformers.models.bloom.modeling_bloom import _make_causal_mask as _make_causal_mask_bloom
+except ImportError:
+    # transformers >= 4.36 removed these private helpers; provide stubs so the
+    # module can be imported even though the MPT path is unused.
+    def _expand_mask_bloom(mask, dtype, tgt_len=None):  # type: ignore[misc]
+        raise NotImplementedError("_expand_mask_bloom not available in this transformers version")
+    def _make_causal_mask_bloom(input_ids_shape, dtype, device, past_key_values_length=0):  # type: ignore[misc]
+        raise NotImplementedError("_make_causal_mask_bloom not available in this transformers version")
 from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
 from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoForCausalLM
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXForCausalLM
 from transformers.models.gptj.modeling_gptj import GPTJForCausalLM
 from transformers.models.opt.modeling_opt import OPTForCausalLM
-from transformers.models.opt.modeling_opt import _expand_mask as _expand_mask_opt
-from transformers.models.opt.modeling_opt import _make_causal_mask as _make_causal_mask_opt
+try:
+    from transformers.models.opt.modeling_opt import _expand_mask as _expand_mask_opt
+    from transformers.models.opt.modeling_opt import _make_causal_mask as _make_causal_mask_opt
+except ImportError:
+    def _expand_mask_opt(mask, dtype, tgt_len=None):  # type: ignore[misc]
+        raise NotImplementedError("_expand_mask_opt not available in this transformers version")
+    def _make_causal_mask_opt(input_ids_shape, dtype, device, past_key_values_length=0):  # type: ignore[misc]
+        raise NotImplementedError("_make_causal_mask_opt not available in this transformers version")
 logger = logging.get_logger(__name__)
 _SUPPORTED_GPT_MODELS = (GPT2LMHeadModel, GPTJForCausalLM, GPTNeoForCausalLM, GPTNeoXForCausalLM)
 CAUSAL_GPT_TYPES = Union[GPT2LMHeadModel, GPTJForCausalLM, GPTNeoForCausalLM, GPTNeoXForCausalLM]

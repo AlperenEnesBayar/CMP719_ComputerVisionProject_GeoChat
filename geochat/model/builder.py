@@ -24,7 +24,7 @@ from geochat.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN,
 
 
 def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto", device="cuda"):
-    kwargs = {"device_map": device_map}
+    kwargs = {}
 
     if load_8bit:
         kwargs['load_in_8bit'] = True
@@ -100,8 +100,12 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                 model = GeoChatMPTForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
             else:
                 print("Loading GeoChat......")
-                tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
-                model = GeoChatLlamaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
+                try:
+                    from transformers import LlamaTokenizer
+                    tokenizer = LlamaTokenizer.from_pretrained(model_path, use_fast=False, legacy=True)
+                except Exception:
+                    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+                model = GeoChatLlamaForCausalLM.from_pretrained(model_path, ignore_mismatched_sizes=True, **kwargs)
     else:
         # Load language model
         if model_base is not None:
@@ -145,5 +149,10 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         context_len = model.config.max_sequence_length
     else:
         context_len = 2048
+
+    # Move whole model to GPU (vision tower was already moved above; move LLM too)
+    import torch as _torch
+    if _torch.cuda.is_available() and device != "cpu":
+        model = model.to(device)
 
     return tokenizer, model, image_processor, context_len

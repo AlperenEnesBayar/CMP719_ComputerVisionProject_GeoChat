@@ -7,70 +7,54 @@ from transformers import CLIPVisionModel, CLIPImageProcessor, CLIPVisionConfig
 
 
 class CLIPVisionTower(nn.Module):
-    def clip_interpolate_embeddings(self, image_size=600, patch_size= 14):
-        """This function helps interpolating positional embeddings during checkpoint loading,
-        especially when you want to apply a pre-trained model on images with different resolution.
- 
-        Args:
-            image_size (int): Image size of the new model.
-            patch_size (int): Patch size of the new model.
-            model_state (OrderedDict[str, torch.Tensor]): State dict of the pre-trained model.
-            interpolation_mode (str): The algorithm used for upsampling. Default: bicubic.
-            reset_heads (bool): If true, not copying the state of heads. Default: False.
- 
-        Returns:
-            OrderedDict[str, torch.Tensor]: A state dict which can be loaded into the new model.
-        """
-        # Shape of pos_embedding is (1, seq_length, hidden_dim)
-        state_dict = self.vision_tower.vision_model.embeddings.position_embedding.state_dict()
+    def _get_clip_embeddings(self):
+        """Return the embeddings module, handling both transformers 4.x and 5.x structures."""
+        vt = self.vision_tower
+        if hasattr(vt, 'vision_model'):
+            return vt.vision_model.embeddings
+        return vt.embeddings
+
+    def clip_interpolate_embeddings(self, image_size=600, patch_size=14):
+        """Interpolate positional embeddings to support a different input resolution."""
+        embeddings = self._get_clip_embeddings()
+        state_dict = embeddings.position_embedding.state_dict()
         pos_embedding = state_dict['weight']
         pos_embedding = pos_embedding.unsqueeze(0)
         n, seq_length, hidden_dim = pos_embedding.shape
         if n != 1:
             raise ValueError(f"Unexpected position embedding shape: {pos_embedding.shape}")
- 
+
         new_seq_length = (image_size // patch_size) ** 2 + 1
- 
-        # Need to interpolate the weights for the position embedding.
-        # We do this by reshaping the positions embeddings to a 2d grid, performing
-        # an interpolation in the (h, w) space and then reshaping back to a 1d grid.
+
         if new_seq_length != seq_length:
-            # The class token embedding shouldn't be interpolated so we split it up.
             seq_length -= 1
             new_seq_length -= 1
             pos_embedding_token = pos_embedding[:, :1, :]
             pos_embedding_img = pos_embedding[:, 1:, :]
- 
-            # (1, seq_length, hidden_dim) -> (1, hidden_dim, seq_length)
+
             pos_embedding_img = pos_embedding_img.permute(0, 2, 1)
             seq_length_1d = int(math.sqrt(seq_length))
             torch._assert(seq_length_1d * seq_length_1d == seq_length, "seq_length is not a perfect square!")
- 
-            # (1, hidden_dim, seq_length) -> (1, hidden_dim, seq_l_1d, seq_l_1d)
+
             pos_embedding_img = pos_embedding_img.reshape(1, hidden_dim, seq_length_1d, seq_length_1d)
             new_seq_length_1d = image_size // patch_size
- 
-            # Perform interpolation.
-            # (1, hidden_dim, seq_l_1d, seq_l_1d) -> (1, hidden_dim, new_seq_l_1d, new_seq_l_1d)
+
             new_pos_embedding_img = nn.functional.interpolate(
                 pos_embedding_img,
                 size=new_seq_length_1d,
                 mode='bicubic',
                 align_corners=True,
             )
- 
-            # (1, hidden_dim, new_seq_l_1d, new_seq_l_1d) -> (1, hidden_dim, new_seq_length)
+
             new_pos_embedding_img = new_pos_embedding_img.reshape(1, hidden_dim, new_seq_length)
- 
-            # (1, hidden_dim, new_seq_length) -> (1, new_seq_length, hidden_dim)
             new_pos_embedding_img = new_pos_embedding_img.permute(0, 2, 1)
             new_pos_embedding = torch.cat([pos_embedding_token, new_pos_embedding_img], dim=1)[0]
             state_dict['weight'] = new_pos_embedding
-            self.vision_tower.vision_model.embeddings.position_embedding = nn.Embedding(new_seq_length+1, hidden_dim)
-            self.vision_tower.vision_model.embeddings.position_embedding.load_state_dict(state_dict)
-            self.vision_tower.vision_model.embeddings.image_size = image_size
-            self.vision_tower.vision_model.embeddings.patch_size = patch_size
-            self.vision_tower.vision_model.embeddings.position_ids = torch.arange(new_seq_length+1).expand((1, -1))
+            embeddings.position_embedding = nn.Embedding(new_seq_length + 1, hidden_dim)
+            embeddings.position_embedding.load_state_dict(state_dict)
+            embeddings.image_size = image_size
+            embeddings.patch_size = patch_size
+            embeddings.position_ids = torch.arange(new_seq_length + 1).expand((1, -1))
             
     def __init__(self, vision_tower, args, delay_load=False):
         super().__init__()
@@ -86,7 +70,17 @@ class CLIPVisionTower(nn.Module):
         else:
             self.cfg_only = CLIPVisionConfig.from_pretrained(self.vision_tower_name)
             self.image_processor = CLIPImageProcessor.from_pretrained(self.vision_tower_name)
-            self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name)
+            # Load CLIP on CPU first to avoid conflicts with accelerate meta-device context
+            import torch, contextlib
+            ctx = torch.device("cpu") if hasattr(torch, "device") else contextlib.nullcontext()
+            with contextlib.ExitStack() as stack:
+                try:
+                    stack.enter_context(torch.device("cpu"))
+                except Exception:
+                    pass
+                self.vision_tower = CLIPVisionModel.from_pretrained(
+                    self.vision_tower_name, device_map=None
+                )
             self.vision_tower.requires_grad_(False)
             self.clip_interpolate_embeddings(image_size=504, patch_size=14)
 
