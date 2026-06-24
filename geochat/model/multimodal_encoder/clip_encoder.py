@@ -52,6 +52,7 @@ class CLIPVisionTower(nn.Module):
             state_dict['weight'] = new_pos_embedding
             embeddings.position_embedding = nn.Embedding(new_seq_length + 1, hidden_dim)
             embeddings.position_embedding.load_state_dict(state_dict)
+            embeddings.position_embedding.requires_grad_(False)
             embeddings.image_size = image_size
             embeddings.patch_size = patch_size
             embeddings.position_ids = torch.arange(new_seq_length + 1).expand((1, -1))

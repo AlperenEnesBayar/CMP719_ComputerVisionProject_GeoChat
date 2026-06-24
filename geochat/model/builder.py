@@ -24,6 +24,12 @@ from geochat.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN,
 
 
 def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto", device="cuda"):
+    # newer huggingface_hub rejects relative paths; always resolve to absolute
+    if os.path.exists(model_path):
+        model_path = os.path.abspath(model_path)
+    if model_base and os.path.exists(model_base):
+        model_base = os.path.abspath(model_base)
+
     kwargs = {}
 
     if load_8bit:
@@ -40,10 +46,13 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         kwargs['torch_dtype'] = torch.float16
 
     if 'geochat' in model_name.lower():
+        # Detect LoRA checkpoints by name or by presence of adapter_config.json
+        _is_lora = ('lora' in model_name.lower() or
+                    os.path.exists(os.path.join(model_path, 'adapter_config.json')))
         # Load LLaVA model
-        if 'lora' in model_name.lower() and model_base is None:
+        if _is_lora and model_base is None:
             warnings.warn('There is `lora` in model name but no `model_base` is provided. If you are loading a LoRA model, please provide the `model_base` argument. Detailed instruction: https://github.com/haotian-liu/LLaVA#launch-a-model-worker-lora-weights-unmerged.')
-        if 'lora' in model_name.lower() and model_base is not None:
+        if _is_lora and model_base is not None:
             lora_cfg_pretrained = AutoConfig.from_pretrained(model_path)
             tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False)
             print('Loading Geochat from base model...')
@@ -69,6 +78,11 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
             non_lora_trainables = {(k[11:] if k.startswith('base_model.') else k): v for k, v in non_lora_trainables.items()}
             if any(k.startswith('model.model.') for k in non_lora_trainables):
                 non_lora_trainables = {(k[6:] if k.startswith('model.') else k): v for k, v in non_lora_trainables.items()}
+            # Skip position_embedding: shape mismatch (1297 vs 577) because clip_interpolate_embeddings
+            # re-creates the embedding at 504px resolution after from_pretrained loads the 336px checkpoint.
+            # It will be correctly sized by vision_tower.load_model() below.
+            non_lora_trainables = {k: v for k, v in non_lora_trainables.items()
+                                   if 'position_embedding' not in k}
             model.load_state_dict(non_lora_trainables, strict=False)
 
             from peft import PeftModel

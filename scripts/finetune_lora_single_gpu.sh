@@ -17,7 +17,7 @@ MODEL_PATH="./checkpoints/GeoChat"
 
 if [ "$DATASET" = "ucmerced" ]; then
     DATA_JSON="./data/finetune/UCMerced_train.json"
-    IMAGE_FOLDER="./datasets/UCMerced/UCMerced_LandUse/Images"
+    IMAGE_FOLDER="./datasets/UCmerced/Images"
     OUTPUT_DIR="./checkpoints/GeoChat-FT-UCMerced"
 elif [ "$DATASET" = "aid" ]; then
     DATA_JSON="./data/finetune/AID_train.json"
@@ -33,7 +33,7 @@ echo "  Data:   $DATA_JSON"
 echo "  Images: $IMAGE_FOLDER"
 echo "  Output: $OUTPUT_DIR"
 
-python geochat/train/train_mem.py \
+WANDB_DISABLED=true PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python geochat/train/train_mem.py \
     --lora_enable True \
     --lora_r 64 \
     --lora_alpha 128 \
@@ -51,8 +51,8 @@ python geochat/train/train_mem.py \
     --fp16 True \
     --output_dir "$OUTPUT_DIR" \
     --num_train_epochs 3 \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 4 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
     --evaluation_strategy "no" \
     --save_strategy "epoch" \
     --save_total_limit 1 \

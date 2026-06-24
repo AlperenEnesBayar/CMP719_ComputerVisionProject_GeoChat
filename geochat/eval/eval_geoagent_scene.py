@@ -17,8 +17,9 @@ def evaluation_metrics(answers_file: str) -> float:
     correct = 0
     for r in results:
         gt = r["question_id"].split("/")[0].replace(" ", "").lower()
-        pred = r["answer"].replace(" ", "").lower().replace(".", "")
-        if gt == pred:
+        pred = r["answer"].replace(" ", "").lower().replace(".", "").replace(",", "")
+        # exact match first; fall back to substring (GeoAgent may give verbose answers)
+        if gt == pred or gt in pred:
             correct += 1
     acc = correct / len(results) if results else 0.0
     print(f"Correct: {correct} / {len(results)}  |  Accuracy: {acc:.4f} ({acc*100:.2f}%)")

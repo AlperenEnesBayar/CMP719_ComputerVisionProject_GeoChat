@@ -1,3 +1,69 @@
-datasets
-checkpoints
-*.pyc
+# ── Model checkpoints & weights ──────────────────────────────────────────────
+checkpoints/GeoChat/pytorch_model*.bin
+checkpoints/GeoChat/pytorch_model.bin.index.json
+checkpoints/GeoChat-FT-*/adapter_model.bin
+checkpoints/GeoChat-FT-*/non_lora_trainables.bin
+checkpoints/GeoChat-FT-*/checkpoint-*/
+
+# ── Datasets (large image folders & heavy JSON splits) ───────────────────────
+datasets/AID/
+datasets/UCmerced/Images/
+datasets/RSVQAHR/Images/
+datasets/RSVQALR/Images_LR/
+
+# Large RSVQA annotation files (>1 MB)
+datasets/RSVQAHR/*.json
+datasets/RSVQALR/*.json
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+.venv/
+venv/
+env/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── LaTeX build artefacts ─────────────────────────────────────────────────────
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+*.vrb
+
+# ── HuggingFace cache ─────────────────────────────────────────────────────────
+.cache/
+
+# ── Editor & OS ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Claude Code local settings ────────────────────────────────────────────────
+.claude/settings.local.json
